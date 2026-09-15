@@ -11,8 +11,6 @@ permissions:
 
 env:
   ANDROID_API: '37'
-  BUILD_TOOLS: '36.0.0'
-  NDK_VERSION: '28.2.13676358'
   GRADLE_VERSION: '9.6.0'
 
 jobs:
@@ -64,11 +62,35 @@ jobs:
         with:
           go-version: '1.27.x'
           cache: true
-      - uses: android-actions/setup-android@v4.0.1
-        with:
-            packages: ''
-      - name: Install Android SDK packages
-        run: sdkmanager --channel=1 "platforms;android-${ANDROID_API}" "build-tools;${BUILD_TOOLS}" "ndk;${NDK_VERSION}"
+      - name: Use runner preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+
+          test -d "$SDK/platforms/android-37.0"
+          test -d "$SDK/build-tools"
+          test -d "$SDK/ndk"
+
+          BUILD_TOOLS="$(find "$SDK/build-tools" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n 1)"
+          NDK_VERSION="$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n 1)"
+
+          test -x "$SDK/build-tools/$BUILD_TOOLS/aapt2"
+          test -x "$SDK/ndk/$NDK_VERSION/ndk-build"
+
+          {
+            echo "ANDROID_SDK_ROOT=$SDK"
+            echo "ANDROID_HOME=$SDK"
+            echo "BUILD_TOOLS=$BUILD_TOOLS"
+            echo "NDK_VERSION=$NDK_VERSION"
+            echo "ANDROID_NDK_HOME=$SDK/ndk/$NDK_VERSION"
+            echo "ANDROID_NDK_ROOT=$SDK/ndk/$NDK_VERSION"
+          } >> "$GITHUB_ENV"
+
+          echo "Using runner Android SDK: $SDK"
+          echo "Using Android Platform: android-37.0"
+          echo "Using latest installed Build-Tools: $BUILD_TOOLS"
+          echo "Using latest installed NDK: $NDK_VERSION"
       - uses: gradle/actions/setup-gradle@v6.2.0
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
@@ -141,11 +163,32 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v4.0.1
-        with:
-            packages: ''
-      - name: Install Android SDK
-        run: sdkmanager --channel=1 "platforms;android-${ANDROID_API}" "build-tools;${BUILD_TOOLS}" "ndk;${NDK_VERSION}"
+      - name: Use runner preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+
+          test -d "$SDK/platforms/android-37.0"
+          test -d "$SDK/build-tools"
+          test -d "$SDK/ndk"
+
+          BUILD_TOOLS="$(find "$SDK/build-tools" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n 1)"
+          NDK_VERSION="$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n 1)"
+
+          {
+            echo "ANDROID_SDK_ROOT=$SDK"
+            echo "ANDROID_HOME=$SDK"
+            echo "BUILD_TOOLS=$BUILD_TOOLS"
+            echo "NDK_VERSION=$NDK_VERSION"
+            echo "ANDROID_NDK_HOME=$SDK/ndk/$NDK_VERSION"
+            echo "ANDROID_NDK_ROOT=$SDK/ndk/$NDK_VERSION"
+          } >> "$GITHUB_ENV"
+
+          echo "Using runner Android SDK: $SDK"
+          echo "Using Android Platform: android-37.0"
+          echo "Using latest installed Build-Tools: $BUILD_TOOLS"
+          echo "Using latest installed NDK: $NDK_VERSION"
       - uses: gradle/actions/setup-gradle@v6.2.0
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
