@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "requiredBackendCount": 10,
+  "backends": [
+    {"id":"kotlin","name":"Kotlin Core Backend","runtime":"android","aar":"cdm-kotlin.aar"},
+    {"id":"go","name":"Go Native Backend","runtime":"android","aar":"cdm-go.aar","abis":["arm64-v8a","armeabi-v7a","x86","x86_64"]},
+    {"id":"java","name":"Java/JCA Backend","runtime":"android","aar":"cdm-java.aar"},
+    {"id":"archive","name":"Apache Commons Compress Backend","runtime":"android","aar":"cdm-archive.aar"},
+    {"id":"msgpack","name":"MessagePack Backend","runtime":"android","aar":"cdm-msgpack.aar"},
+    {"id":"android","name":"Android Platform / SAF Backend","runtime":"android","aar":"cdm-android.aar"},
+    {"id":"format","name":"Format Intelligence Backend","runtime":"android","aar":"cdm-format.aar"},
+    {"id":"protocol","name":"Protocol Intelligence Backend","runtime":"android","aar":"cdm-protocol.aar"},
+    {"id":"node","name":"Node.js Parity Backend","runtime":"ci-desktop","entry":"backend/node/index.js"},
+    {"id":"python","name":"Python Parity Backend","runtime":"ci-desktop","entry":"backend/python/engine.py"}
+  ]
+}

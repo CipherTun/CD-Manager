@@ -1,0 +1,172 @@
+name: CD Manager — Universal Multi-Backend Android Build v0.6.0
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_API: '37'
+  BUILD_TOOLS: '36.0.0'
+  NDK_VERSION: '28.2.13676358'
+  GRADLE_VERSION: '9.6.0'
+
+jobs:
+  backend-parity:
+    name: Validate required Node.js + Python backends
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Node.js backend smoke test
+        run: |
+          printf '%s\n' '{"op":"analyze","dataBase64":"Y2Rt"}' | node backend/node/index.js | tee node-result.json
+          grep -q 'sha256' node-result.json
+          grep -q 'entropy' node-result.json
+      - name: Python backend smoke test
+        run: |
+          printf '%s\n' '{"op":"analyze","dataBase64":"Y2Rt"}' | python3 backend/python/engine.py | tee python-result.json
+          grep -q 'sha256' python-result.json
+          grep -q 'entropy' python-result.json
+      - name: Verify ten-backend manifest
+        run: |
+          test "$(python3 -c 'import json; print(len(json.load(open("backend/BACKENDS.json"))["backends"]))')" = "10"
+      - name: Package required parity backends
+        run: |
+          mkdir -p artifacts/backend-parity
+          cp backend/BACKENDS.json backend/ENGINE-MATRIX.md artifacts/backend-parity/
+          cp backend/node/index.js backend/node/README.md artifacts/backend-parity/
+          cp backend/python/engine.py backend/python/README.md artifacts/backend-parity/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cd-manager-parity-backends
+          path: artifacts/backend-parity
+
+  android-backends:
+    name: Build all required Android AAR backends
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: sdkmanager --channel=1 "platforms;android-${ANDROID_API}.0" "build-tools;${BUILD_TOOLS}" "ndk;${NDK_VERSION}"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+      - name: Test Go backend
+        run: |
+          cd backend/go
+          go test ./...
+      - name: Build JVM/Android backend AARs
+        run: |
+          set -eux
+          mkdir -p app/libs artifacts/aar
+          gradle --no-daemon --parallel --build-cache --configuration-cache \
+            :backend-kotlin:assembleRelease \
+            :backend-java:assembleRelease \
+            :backend-archive:assembleRelease \
+            :backend-msgpack:assembleRelease \
+            :backend-android:assembleRelease \
+            :backend-format:assembleRelease \
+            :backend-protocol:assembleRelease
+          cp backend-kotlin/build/outputs/aar/backend-kotlin-release.aar app/libs/cdm-kotlin.aar
+          cp backend-java/build/outputs/aar/backend-java-release.aar app/libs/cdm-java.aar
+          cp backend-archive/build/outputs/aar/backend-archive-release.aar app/libs/cdm-archive.aar
+          cp backend-msgpack/build/outputs/aar/backend-msgpack-release.aar app/libs/cdm-msgpack.aar
+          cp backend-android/build/outputs/aar/backend-android-release.aar app/libs/cdm-android.aar
+          cp backend-format/build/outputs/aar/backend-format-release.aar app/libs/cdm-format.aar
+          cp backend-protocol/build/outputs/aar/backend-protocol-release.aar app/libs/cdm-protocol.aar
+          ls -lh app/libs
+      - name: Build Go Android AAR — all Android ABIs
+        run: |
+          set -eux
+          mkdir -p app/libs
+          cd backend/go
+          go get -tool golang.org/x/mobile/cmd/gobind
+          export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          test -x "$ANDROID_NDK_HOME/ndk-build"
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          gomobile version
+          gomobile init
+          gomobile bind \
+            -target android \
+            -androidapi 21 \
+            -javapkg io.ciphertun.cdmgo \
+            -o ../../app/libs/cdm-go.aar \
+            ./cdmengine
+      - name: Verify every required AAR
+        run: |
+          set -eux
+          for aar in app/libs/*.aar; do test -s "$aar"; unzip -t "$aar" >/dev/null; done
+          for aar in app/libs/cdm-kotlin.aar app/libs/cdm-java.aar app/libs/cdm-archive.aar app/libs/cdm-msgpack.aar app/libs/cdm-android.aar app/libs/cdm-format.aar app/libs/cdm-protocol.aar app/libs/cdm-go.aar; do test -s "$aar"; done
+          unzip -l app/libs/cdm-go.aar | grep -E 'arm64-v8a|armeabi-v7a|x86|x86_64'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cd-manager-required-aars
+          path: app/libs/*.aar
+
+  android-app:
+    name: Build and test CD Manager APK
+    needs: [android-backends, backend-parity]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: cd-manager-required-aars
+          path: app/libs
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager --channel=1 "platforms;android-${ANDROID_API}.0" "build-tools;${BUILD_TOOLS}" "ndk;${NDK_VERSION}"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+      - name: Compile and test
+        run: gradle --no-daemon --parallel --build-cache --configuration-cache :app:testDebugUnitTest :app:assembleDebug
+      - name: Verify universal APK and required backend packaging
+        run: |
+          set -eux
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          unzip -l "$APK" | grep -E 'lib/(arm64-v8a|armeabi-v7a|x86|x86_64)/' | tee abi.txt
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do grep -q "lib/$abi/" abi.txt; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cd-manager-universal-v0.6.0
+          path: |
+            app/build/outputs/apk/debug/*.apk
+      - name: Verify debug APK
+        run: |
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cd-manager-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
