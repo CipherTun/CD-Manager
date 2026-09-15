@@ -20,11 +20,11 @@ jobs:
     name: Validate required Node.js + Python backends
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       - name: Node.js backend smoke test
@@ -46,7 +46,7 @@ jobs:
           cp backend/BACKENDS.json backend/ENGINE-MATRIX.md artifacts/backend-parity/
           cp backend/node/index.js backend/node/README.md artifacts/backend-parity/
           cp backend/python/engine.py backend/python/README.md artifacts/backend-parity/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: cd-manager-parity-backends
           path: artifacts/backend-parity
@@ -55,19 +55,19 @@ jobs:
     name: Build all required Android AAR backends
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.27.x'
           cache: true
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4.0.1
       - name: Install Android SDK packages
         run: sdkmanager --channel=1 "platforms;android-${ANDROID_API}" "build-tools;${BUILD_TOOLS}" "ndk;${NDK_VERSION}"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6.2.0
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
       - name: Test Go backend
@@ -120,7 +120,7 @@ jobs:
           for aar in app/libs/*.aar; do test -s "$aar"; unzip -t "$aar" >/dev/null; done
           for aar in app/libs/cdm-kotlin.aar app/libs/cdm-java.aar app/libs/cdm-archive.aar app/libs/cdm-msgpack.aar app/libs/cdm-android.aar app/libs/cdm-format.aar app/libs/cdm-protocol.aar app/libs/cdm-go.aar; do test -s "$aar"; done
           unzip -l app/libs/cdm-go.aar | grep -E 'arm64-v8a|armeabi-v7a|x86|x86_64'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: cd-manager-required-aars
           path: app/libs/*.aar
@@ -130,19 +130,19 @@ jobs:
     needs: [android-backends, backend-parity]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v5
         with:
           name: cd-manager-required-aars
           path: app/libs
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4.0.1
       - name: Install Android SDK
         run: sdkmanager --channel=1 "platforms;android-${ANDROID_API}" "build-tools;${BUILD_TOOLS}" "ndk;${NDK_VERSION}"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6.2.0
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
       - name: Compile and test
@@ -154,7 +154,7 @@ jobs:
           test -f "$APK"
           unzip -l "$APK" | grep -E 'lib/(arm64-v8a|armeabi-v7a|x86|x86_64)/' | tee abi.txt
           for abi in arm64-v8a armeabi-v7a x86 x86_64; do grep -q "lib/$abi/" abi.txt; done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: cd-manager-universal-v0.6.0
           path: |
@@ -165,7 +165,7 @@ jobs:
           ls -lh app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: cd-manager-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
